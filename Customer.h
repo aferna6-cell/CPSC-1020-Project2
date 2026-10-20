@@ -13,6 +13,9 @@ public:
     // Create a customer at the given location (initially visits no cafe).
     explicit Customer(float location);
 
+    // Destructor: cafe pointer is non-owning, so the cafe is not deleted.
+    ~Customer();
+
     // Access the customer's location and selected cafe.
     float getLocation() const;
     Cafe* getVisitedCafe() const;
