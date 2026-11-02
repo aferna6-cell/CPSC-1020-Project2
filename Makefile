@@ -1,5 +1,7 @@
 # CPSC 1020 Project 2 -- Group 19
-# Build and run the classroom test program with: make test
+# make       build the Group 19 test program
+# make test  build it, run it, and return nonzero if any check fails
+# make clean remove object files and the test program
 
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -Wpedantic -O2

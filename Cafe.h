@@ -10,6 +10,9 @@ private:
     int customerCount;    // Number of customers served (no customer list needed)
 
 public:
+    // Create a cafe at 0 km charging $0, with no profit and no customers.
+    Cafe();
+
     // Create a cafe with a coffee price and beach location.
     Cafe(float coffeeCost, float location);
 
