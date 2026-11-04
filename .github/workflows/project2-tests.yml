@@ -1,0 +1,16 @@
+name: Project 2 tests
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  compile-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Build from scratch and run Group 19 tests
+        run: |
+          make clean
+          make test
