@@ -24,12 +24,12 @@ namespace {
 }
 
 Cafe::Cafe()
-    : location(0.0f), coffeeCost(0.0f), totalProfit(0.0f), customerCount(0) {
+    : location(0.0f), coffeeCost(0.0f), totalProfit(0.0), customerCount(0) {
     // Execution has entered the Cafe default constructor.
 }
 
 Cafe::Cafe(float coffeeCost, float location)
-    : location(location), coffeeCost(coffeeCost), totalProfit(0.0f),
+    : location(location), coffeeCost(coffeeCost), totalProfit(0.0),
       customerCount(0) {
     // Execution has entered the Cafe parameterized constructor.
     validateCoffeeCost(coffeeCost);
@@ -44,7 +44,7 @@ float Cafe::getCoffeeCost() const {
     return coffeeCost;
 }
 
-float Cafe::getTotalProfit() const {
+double Cafe::getTotalProfit() const {
     return totalProfit;
 }
 
@@ -69,7 +69,7 @@ void Cafe::recordSale() {
 }
 
 void Cafe::resetStatistics() {
-    totalProfit = 0.0f;
+    totalProfit = 0.0;
     customerCount = 0;
 }
 

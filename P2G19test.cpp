@@ -1,5 +1,7 @@
 // CPSC 1020 Project 2 - Group 19
-// Ordinary and extreme tests for the November 5 milestone.
+// Ordinary and extreme tests for the Cafe and Customer classes.
+// (Test program only - the submitted makefile builds P2G19main. Build this with:
+//   g++ -std=c++11 -Wall -Wextra -o P2G19test P2G19test.cpp Cafe.cpp Customer.cpp)
 // Diagnostic lines are printed only when a check fails.
 // A single pass/fail summary is printed at the end.
 
@@ -53,6 +55,15 @@ namespace {
         return false;
     }
 
+    // True when the customer's own copy of its visited cafe has the same
+    // location and price as the given cafe (the copy is a different object).
+    bool visited(const Customer& customer, const Cafe& cafe) {
+        const Cafe* copy = customer.getVisitedCafe();
+        return copy != nullptr && copy != &cafe &&
+               copy->getLocation() == cafe.getLocation() &&
+               copy->getCoffeeCost() == cafe.getCoffeeCost();
+    }
+
     // Independent copy of the slide formula, used to cross-check Customer.
     float specScore(float customerLocation, const Cafe& cafe) {
         const float distance = std::fabs(customerLocation - cafe.getLocation());
@@ -60,7 +71,7 @@ namespace {
     }
 
     // Index of the highest probability, or -1 when the denominator is unusable.
-    // Equal probabilities keep the earliest cafe, matching Customer::chooseCafe.
+    // Equal probabilities keep the earliest cafe (ties are random in Customer).
     int indexOfHighestProbability(float customerLocation, Cafe* cafes[], int cafeCount) {
         float total = 0.0f;
         for (int i = 0; i < cafeCount; ++i) {
@@ -147,30 +158,38 @@ int main() {
               "setters accept a beach endpoint and a new price");
     }
 
-    // --- Copying, assignment, and non-owning destruction ---
+    // --- Big Three: deep copy constructor, deep copy assignment, destructor ---
     {
         Cafe* heapCafe = new Cafe(5.0f, 4.0f);
         Cafe other(2.0f, 9.0f);
         Customer original(4.0f);
         Cafe* onlyHeap[] = {heapCafe};
-        original.chooseCafe(onlyHeap, 1);
+        check(original.chooseCafe(onlyHeap, 1) == 0 && visited(original, *heapCafe),
+              "chooseCafe returns the index and stores a separate copy of the cafe");
 
         Customer copied(original);
-        check(near(copied.getLocation(), 4.0f) && copied.getVisitedCafe() == heapCafe &&
-                  heapCafe->getCustomerCount() == 1,
-              "copy constructor copies the cafe pointer and does not record another sale");
+        check(near(copied.getLocation(), 4.0f) && copied.getVisitedCafe() != nullptr &&
+                  copied.getVisitedCafe() != original.getVisitedCafe() &&
+                  visited(copied, *heapCafe) && heapCafe->getCustomerCount() == 1,
+              "copy constructor makes a NEW cafe (deep copy) with the same values");
 
         Customer assigned(9.0f);
         Cafe* onlyOther[] = {&other};
         assigned.chooseCafe(onlyOther, 1);
+        const Cafe* beforeAssign = assigned.getVisitedCafe();
         assigned = original;
-        check(assigned.getVisitedCafe() == heapCafe && near(assigned.getLocation(), 4.0f) &&
+        check(assigned.getVisitedCafe() != nullptr &&
+                  assigned.getVisitedCafe() != original.getVisitedCafe() &&
+                  visited(assigned, *heapCafe) && near(assigned.getLocation(), 4.0f) &&
                   heapCafe->getCustomerCount() == 1 && other.getCustomerCount() == 1,
-              "copy assignment replaces the pointer and does not record a sale");
+              "copy assignment makes a NEW cafe (deep copy) and records no sale");
+        check(beforeAssign != nullptr, "setup: assigned customer had its own cafe before");
 
-        assigned = assigned;
-        check(assigned.getVisitedCafe() == heapCafe && heapCafe->getCustomerCount() == 1,
-              "self-assignment keeps the same non-owning cafe pointer");
+        const Cafe* beforeSelf = assigned.getVisitedCafe();
+        Customer& alias = assigned;
+        assigned = alias;
+        check(assigned.getVisitedCafe() == beforeSelf && visited(assigned, *heapCafe),
+              "self-assignment keeps the same owned cafe (not deleted)");
 
         Customer first(1.0f);
         Customer second(2.0f);
@@ -180,19 +199,35 @@ int main() {
                   first.getVisitedCafe() == nullptr && second.getVisitedCafe() == nullptr,
               "chained assignment copies location and a null cafe pointer");
 
+        Customer empty;
+        Customer emptyCopy(empty);
+        check(emptyCopy.getVisitedCafe() == nullptr,
+              "copying a customer with no cafe copies nullptr (nothing allocated)");
+        original = empty;
+        check(original.getVisitedCafe() == nullptr && near(original.getLocation(), 0.0f),
+              "assigning an empty customer deletes the old cafe copy and stores nullptr");
+
+        // Changing the real cafe afterwards does not change a customer's copy.
+        heapCafe->setCoffeeCost(3.0f);
+        check(near(copied.getVisitedCafe()->getCoffeeCost(), 5.0f),
+              "a deep copy is independent of the original cafe");
+
         {
-            Customer temporary(original);
+            Customer temporary(copied);
             Customer anotherCopy;
             anotherCopy = temporary;
-            check(temporary.getVisitedCafe() == heapCafe &&
-                      anotherCopy.getVisitedCafe() == heapCafe,
-                  "copies share the cafe address while the cafe is still alive");
+            check(temporary.getVisitedCafe() != anotherCopy.getVisitedCafe() &&
+                      temporary.getVisitedCafe() != copied.getVisitedCafe(),
+                  "every copy owns a different cafe address");
         }
-        check(original.getVisitedCafe() == heapCafe && heapCafe->getCustomerCount() == 1 &&
-                  near(heapCafe->getTotalProfit(), 3.0f),
-              "destroying customer copies does not delete the cafe or change its sale");
+        check(copied.getVisitedCafe() != nullptr &&
+                  near(copied.getVisitedCafe()->getCoffeeCost(), 5.0f) &&
+                  heapCafe->getCustomerCount() == 1 && near(heapCafe->getTotalProfit(), 3.0f),
+              "destroying copies deletes only their own cafes, not others or the real cafe");
 
         delete heapCafe;
+        check(copied.getVisitedCafe() != nullptr && near(copied.getVisitedCafe()->getLocation(), 4.0f),
+              "a customer's copy is still valid after the program deletes the real cafe");
     }
 
     // --- Scores: distance is nonnegative, endpoints, same position ---
@@ -234,13 +269,13 @@ int main() {
                   1.0f, "probabilities of the two $5 cafes add to 1");
 
         atZero.chooseCafe(identicalPrices, 2);
-        check(atZero.getVisitedCafe() == &nearCafe && nearCafe.getCustomerCount() == 1 &&
+        check(visited(atZero, nearCafe) && nearCafe.getCustomerCount() == 1 &&
                   farCafe.getCustomerCount() == 0,
               "highest probability selects the closer equally priced cafe and stores it");
 
         Customer atTen(10.0f);
         atTen.chooseCafe(identicalPrices, 2);
-        check(atTen.getVisitedCafe() == &farCafe && farCafe.getCustomerCount() == 1,
+        check(visited(atTen, farCafe) && farCafe.getCustomerCount() == 1,
               "customer at 10 km selects the cafe at 10 km");
 
         // Different prices. Customer at 5 km.
@@ -259,31 +294,41 @@ int main() {
         checkNear(middle.calculateProbability(differentPrices, 2, 1), 19.0f / 29.0f,
                   "probability of the $2 cafe is 19/29");
         middle.chooseCafe(differentPrices, 2);
-        check(middle.getVisitedCafe() == &cheapFar && cheapFar.getCustomerCount() == 1 &&
+        check(visited(middle, cheapFar) && cheapFar.getCustomerCount() == 1 &&
                   expensiveClose.getCustomerCount() == 0,
               "highest probability selects the cheaper cafe when its probability is larger");
 
-        // Same score, so the same probability. The earlier array entry wins.
+        // Same score, so the same probability. Ties are split at random.
         Cafe tieLeft(4.0f, 4.0f);
         Cafe tieRight(4.0f, 6.0f);
         Customer centered(5.0f);
         checkNear(centered.calculateScore(tieLeft), 15.0f, "left cafe of a tie scores 15");
         checkNear(centered.calculateScore(tieRight), 15.0f, "right cafe of a tie scores 15");
-        Cafe* tieFirstRight[] = {&tieRight, &tieLeft};
-        centered.chooseCafe(tieFirstRight, 2);
-        const float rightProb = centered.calculateProbability(tieFirstRight, 2, 0);
-        const float leftProb = centered.calculateProbability(tieFirstRight, 2, 1);
-        check(near(rightProb, leftProb) && centered.getVisitedCafe() == &tieRight &&
-                  tieRight.getCustomerCount() == 1 && tieLeft.getCustomerCount() == 0,
-              "equal probabilities keep the earliest cafe in the array");
+        Cafe* tieList[] = {&tieRight, &tieLeft};
+        check(near(centered.calculateProbability(tieList, 2, 0),
+                   centered.calculateProbability(tieList, 2, 1)),
+              "tied cafes have equal probability");
+        const int tieTrials = 2000;
+        for (int i = 0; i < tieTrials; ++i) {
+            Customer person(5.0f);
+            person.chooseCafe(tieList, 2);
+        }
+        check(tieRight.getCustomerCount() + tieLeft.getCustomerCount() == tieTrials &&
+                  tieRight.getCustomerCount() > tieTrials / 3 &&
+                  tieLeft.getCustomerCount() > tieTrials / 3,
+              "equal probabilities split customers between both cafes (fair tie-break)");
 
-        Cafe tieA(5.0f, 5.0f);
-        Cafe tieB(5.0f, 5.0f);
-        Cafe* reversed[] = {&tieB, &tieA};
-        Customer again(5.0f);
-        again.chooseCafe(reversed, 2);
-        check(again.getVisitedCafe() == &tieB && tieA.getCustomerCount() == 0,
-              "a second tie also keeps the first cafe rather than the later twin");
+        Cafe twinA(5.0f, 5.0f);
+        Cafe twinB(5.0f, 5.0f);
+        Cafe twinOff(5.0f, 9.0f);
+        Cafe* twins[] = {&twinA, &twinOff, &twinB};
+        for (int i = 0; i < tieTrials; ++i) {
+            Customer person(5.0f);
+            person.chooseCafe(twins, 3);
+        }
+        check(twinOff.getCustomerCount() == 0 && twinA.getCustomerCount() > 0 &&
+                  twinB.getCustomerCount() > 0,
+              "identical twin cafes share customers; the lower-probability cafe gets none");
 
         // Three cafes, ordinary normalization. Customer at 2 km, every price $5.
         // Scores: dist 2 -> 11, dist 0 -> 13, dist 8 -> 5. Sum = 29.
@@ -300,7 +345,7 @@ int main() {
         checkNear(p2, 5.0f / 29.0f, "three-cafe probability of the cafe at 10 km is 5/29");
         checkNear(p0 + p1 + p2, 1.0f, "three valid probabilities add to 1");
         atTwo.chooseCafe(three, 3);
-        check(atTwo.getVisitedCafe() == &c1 && c1.getCustomerCount() == 1 &&
+        check(visited(atTwo, c1) && c1.getCustomerCount() == 1 &&
                   c0.getCustomerCount() == 0 && c2.getCustomerCount() == 0,
               "the cafe with the highest of three probabilities is selected");
 
@@ -311,7 +356,7 @@ int main() {
         checkNear(visitor.calculateProbability(one, 1, 0), 1.0f,
                   "a single cafe has probability 1");
         visitor.chooseCafe(one, 1);
-        check(visitor.getVisitedCafe() == &alone, "a single cafe is stored as the selection");
+        check(visited(visitor, alone), "a single cafe is stored as the selection");
 
         // Positive total with a negative score. Probabilities are not clamped.
         // Cafe P at 0 km, $4: score = 16. Cafe N at 0 km, $12: score = -8. Sum = 8.
@@ -324,7 +369,7 @@ int main() {
         checkNear(origin.calculateProbability(mixedSigns, 2, 1), -1.0f,
                   "a negative score over a positive total gives a negative probability");
         origin.chooseCafe(mixedSigns, 2);
-        check(origin.getVisitedCafe() == &positiveScore && negativeScore.getCustomerCount() == 0,
+        check(visited(origin, positiveScore) && negativeScore.getCustomerCount() == 0,
               "the larger probability is selected when one probability is negative");
 
         // Negative total. Highest probability is not the highest score.
@@ -341,7 +386,7 @@ int main() {
         checkNear(picker.calculateProbability(negativeTotal, 2, 1), 0.36f,
                   "negative total: higher score has probability 0.36");
         picker.chooseCafe(negativeTotal, 2);
-        check(picker.getVisitedCafe() == &lowerScore && lowerScore.getCustomerCount() == 1 &&
+        check(visited(picker, lowerScore) && lowerScore.getCustomerCount() == 1 &&
                   higherScore.getCustomerCount() == 0,
               "selection uses probability, so a negative total can reject the higher score");
 
@@ -373,7 +418,7 @@ int main() {
         Cafe recovery(5.0f, 0.0f);
         Cafe* recoveryList[] = {&recovery};
         zeroCustomer.chooseCafe(recoveryList, 1);
-        check(zeroCustomer.getVisitedCafe() == &recovery && recovery.getCustomerCount() == 1,
+        check(visited(zeroCustomer, recovery) && recovery.getCustomerCount() == 1,
               "a customer who could not choose can still select a later valid cafe");
 
         // Non-finite score from an enormous legal price. Must not crash or sell.
@@ -423,7 +468,7 @@ int main() {
         check(throwsAsExpected<std::invalid_argument>([&buyer, &hasNull]() {
                   buyer.chooseCafe(hasNull, 2);
               }) && sold.getCustomerCount() == salesBeforeNull &&
-                  buyer.getVisitedCafe() == &sold,
+                  visited(buyer, sold),
               "a null cafe pointer throws, does not crash, and does not record a sale");
 
         Cafe* startsNull[] = {nullptr, &sold};
@@ -434,14 +479,13 @@ int main() {
                   sold.getCustomerCount() == salesBeforeNull,
               "a null pointer earlier in the list also records no sale");
 
-        buyer.chooseCafe(present, 1);
         check(sold.getCustomerCount() == 1 && near(sold.getTotalProfit(), 3.0f) &&
-                  buyer.getVisitedCafe() == &sold,
-              "one customer records exactly one sale even if chooseCafe is called twice");
+                  visited(buyer, sold),
+              "one chooseCafe call records exactly one sale");
 
         Customer secondBuyer(3.0f);
         secondBuyer.chooseCafe(present, 1);
-        check(secondBuyer.getVisitedCafe() == &sold && sold.getCustomerCount() == 2 &&
+        check(visited(secondBuyer, sold) && sold.getCustomerCount() == 2 &&
                   near(sold.getTotalProfit(), 6.0f),
               "a second customer records a second sale on the same cafe");
     }
@@ -489,8 +533,9 @@ int main() {
         fiveDollar.resetStatistics();
         check(fiveDollar.getCustomerCount() == 0 && near(fiveDollar.getTotalProfit(), 0.0f),
               "reset clears profit and customer count");
-        check(first.getVisitedCafe() == &fiveDollar,
-              "reset does not destroy the cafe or clear a customer's non-owning pointer");
+        check(first.getVisitedCafe() != nullptr &&
+                  first.getVisitedCafe()->getCustomerCount() == 1,
+              "reset does not change a customer's own copy of the cafe");
 
         Customer afterReset(1.0f);
         afterReset.chooseCafe(fiveList, 1);
@@ -531,14 +576,18 @@ int main() {
             const float spot = step / 10.0f;
             const int expected = indexOfHighestProbability(spot, row, 3);
             Customer person(spot);
-            person.chooseCafe(row, 3);
-            const bool matches = (expected < 0) ? person.getVisitedCafe() == nullptr
-                                                : person.getVisitedCafe() == row[expected];
+            const int chosen = person.chooseCafe(row, 3);
+            // A tie (4 km and 6 km) may pick either tied cafe, so compare probabilities.
+            const bool matches =
+                (expected < 0) ? chosen == -1
+                               : (chosen >= 0 &&
+                                  person.calculateProbability(row, 3, chosen) ==
+                                      person.calculateProbability(row, 3, expected));
             if (!matches) {
                 ++selectionMismatches;
             }
-            if (expected >= 0) {
-                predictedProfit += row[expected]->getCoffeeCost() - 2.0f;
+            if (chosen >= 0) {
+                predictedProfit += row[chosen]->getCoffeeCost() - 2.0f;
             }
         }
 
@@ -574,8 +623,9 @@ int main() {
             const float spot = positions(generator);
             const int expected = indexOfHighestProbability(spot, simCafes, 4);
             Customer arriving(spot);
-            arriving.chooseCafe(simCafes, 4);
-            if (arriving.getVisitedCafe() != simCafes[expected]) {
+            const int chosen = arriving.chooseCafe(simCafes, 4);
+            if (chosen < 0 || arriving.calculateProbability(simCafes, 4, chosen) !=
+                                  arriving.calculateProbability(simCafes, 4, expected)) {
                 ++mismatches;
             }
         }

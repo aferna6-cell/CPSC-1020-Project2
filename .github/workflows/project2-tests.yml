@@ -10,7 +10,14 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Build from scratch and run Group 19 tests
+      - name: Build the simulation with the submitted makefile
         run: |
           make clean
-          make test
+          make
+      - name: Build and run the class tests (memory-checked)
+        run: |
+          g++ -std=c++11 -Wall -Wextra -pedantic -g -fsanitize=address,undefined \
+            -o P2G19test P2G19test.cpp Cafe.cpp Customer.cpp
+          ./P2G19test
+      - name: Smoke-test the simulation with invalid then valid input
+        run: printf 'x\n0\n1\n1\n11\n5\n5\n5\n5\n1000\nn\n' | ./P2G19main

@@ -6,7 +6,8 @@ class Cafe {
 private:
     float location;       // Cafe position on the beach (km)
     float coffeeCost;     // Price charged for one coffee (dollars)
-    float totalProfit;    // Profit earned during the simulation (dollars)
+    double totalProfit;   // Profit earned during the simulation (dollars).
+                          // double keeps 50,000+ sales from drifting.
     int customerCount;    // Number of customers served (no customer list needed)
 
 public:
@@ -19,7 +20,7 @@ public:
     // Access the cafe's information and simulation statistics.
     float getLocation() const;
     float getCoffeeCost() const;
-    float getTotalProfit() const;
+    double getTotalProfit() const;
     int getCustomerCount() const;
 
     // Change a cafe's settings before a simulation.
